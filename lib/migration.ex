@@ -69,7 +69,7 @@ defmodule Pointers.Migration do
 
   @spec add_pointer_ref_pk() :: nil
   def add_pointer_ref_pk(),
-    do: add(:id, strong_pointer(Pointer.__schema__(:table)), primary_key: true)
+    do: add(:id, strong_pointer(Pointer.__schema__(:source)), primary_key: true)
 
   @doc "Creates a pointable table along with its trigger."
   @spec create_pointable_table(name :: binary, id :: binary, body :: term) :: term
