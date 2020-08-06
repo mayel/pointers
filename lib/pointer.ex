@@ -16,6 +16,7 @@ defmodule Pointers.Pointer do
   schema(table) do
     belongs_to(:table, Table)
     field(:pointed, :any, virtual: true)
+    Flexto.flex_schema(:pointers)
   end
 
   def create(id \\ Pointers.ULID.generate(), table) do
