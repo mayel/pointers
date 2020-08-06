@@ -6,6 +6,7 @@ defmodule Pointers.Pointer do
   use Ecto.Schema
   alias Ecto.Changeset
   alias Pointers.{Pointer, Table, Tables, ULID}
+  require Flexto
 
   table =
     Application.get_env(:pointers, __MODULE__, [])
