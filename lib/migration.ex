@@ -73,9 +73,10 @@ defmodule Pointers.Migration do
 
   @doc "Creates a pointable table along with its trigger."
   @spec create_pointable_table(schema :: atom, body :: term) :: term
-  @spec create_pointable_table(schema :: atom, opts :: Keyword.t, body :: term) :: term
+  @spec create_pointable_table(schema :: atom, opts :: Keyword.t(), body :: term) :: term
   @spec create_pointable_table(source :: binary, id :: binary, body :: term) :: term
-  @spec create_pointable_table(source :: binary, id :: binary, opts :: Keyword.t, body :: term) :: term
+  @spec create_pointable_table(source :: binary, id :: binary, opts :: Keyword.t(), body :: term) ::
+          term
   defmacro create_pointable_table(a, b), do: cpt(a, b)
   defmacro create_pointable_table(a, b, c), do: cpt(a, b, c)
   defmacro create_pointable_table(a, b, c, d), do: cpt(a, b, c, d)
@@ -85,14 +86,17 @@ defmodule Pointers.Migration do
     id = schema.__pointable__(:table_id)
     cpt(source, id, [], body)
   end
+
   defp cpt(schema, opts, body) when is_atom(schema) and is_list(opts) do
     source = schema.__schema__(:source)
     id = schema.__pointable__(:table_id)
     cpt(source, id, opts, body)
   end
+
   defp cpt(source, id, body) when is_binary(source) and is_binary(id) do
     cpt(source, id, [], body)
   end
+
   defp cpt(source, id, opts, body) when is_binary(source) and is_binary(id) and is_list(opts) do
     Pointers.ULID.cast!(id)
     opts = [primary_key: false] ++ opts
@@ -100,10 +104,12 @@ defmodule Pointers.Migration do
     quote do
       Pointers.Migration.insert_table_record(unquote(id), unquote(source))
       table = Ecto.Migration.table(unquote(source), unquote(opts))
+
       Ecto.Migration.create_if_not_exists table do
         Pointers.Migration.add_pointer_pk()
         unquote(body)
       end
+
       Pointers.Migration.create_pointer_trigger(unquote(source))
     end
   end
@@ -126,10 +132,12 @@ defmodule Pointers.Migration do
 
   @doc "Creates a mixin table - one with a ULID primary key and no trigger"
   defmacro create_mixin_table(name, opts \\ [], body) do
-    name = cond do
-      is_binary(name) -> name
-      is_atom(name) -> name.__schema__(:source)
-    end
+    name =
+      cond do
+        is_binary(name) -> name
+        is_atom(name) -> name.__schema__(:source)
+      end
+
     opts = [primary_key: false] ++ opts
 
     quote do
@@ -176,8 +184,9 @@ defmodule Pointers.Migration do
 
       add(:table_id, ref, null: false)
     end
-    create_if_not_exists unique_index(Table.__schema__(:source), :table)
-    create_if_not_exists index(Pointer.__schema__(:source), :table_id)
+
+    create_if_not_exists(unique_index(Table.__schema__(:source), :table))
+    create_if_not_exists(index(Pointer.__schema__(:source), :table_id))
     flush()
     insert_table_record(Table.__pointable__(:table_id), Table.__schema__(:source))
     create_pointer_trigger_function()
@@ -188,29 +197,30 @@ defmodule Pointers.Migration do
   def init_pointers(:down) do
     drop_pointer_trigger(Table.__schema__(:source))
     drop_pointer_trigger_function()
-    drop_if_exists index(Pointer.__schema__(:source), :table_id)
-    drop_if_exists index(Table.__schema__(:source), :table)
+    drop_if_exists(index(Pointer.__schema__(:source), :table_id))
+    drop_if_exists(index(Table.__schema__(:source), :table))
     drop_table(Pointer.__schema__(:source))
     drop_table(Table.__schema__(:source))
   end
 
   @doc false
   def create_pointer_trigger_function() do
-    :ok = execute """
-    create or replace function #{@trigger_function}() returns trigger as $$
-    declare table_id uuid;
-    begin
-      select id into table_id from #{Table.__schema__(:source)}
-        where #{Table.__schema__(:source)}.table = TG_TABLE_NAME;
-      if table_id is null then
-        raise exception 'Table % does not participate in the pointers abstraction', TG_TABLE_NAME;
-      end if;
-      insert into #{Pointer.__schema__(:source)} (id, table_id) values (NEW.id, table_id)
-      on conflict do nothing;
-      return NEW;
-    end;
-    $$ language plpgsql
-    """
+    :ok =
+      execute("""
+      create or replace function #{@trigger_function}() returns trigger as $$
+      declare table_id uuid;
+      begin
+        select id into table_id from #{Table.__schema__(:source)}
+          where #{Table.__schema__(:source)}.table = TG_TABLE_NAME;
+        if table_id is null then
+          raise exception 'Table % does not participate in the pointers abstraction', TG_TABLE_NAME;
+        end if;
+        insert into #{Pointer.__schema__(:source)} (id, table_id) values (NEW.id, table_id)
+        on conflict do nothing;
+        return NEW;
+      end;
+      $$ language plpgsql
+      """)
   end
 
   @doc false
@@ -258,12 +268,12 @@ defmodule Pointers.Migration do
   end
 
   def drop_table(name) do
-    name = cond do
-      is_binary(name) -> name
-      is_atom(name) -> name.__schema__(:source)
-    end
-    execute "drop table if exists #{name} cascade"
-  end
+    name =
+      cond do
+        is_binary(name) -> name
+        is_atom(name) -> name.__schema__(:source)
+      end
 
-  def drop_table(name), do: execute("drop table if exists #{name} cascade")
+    execute("drop table if exists #{name} cascade")
+  end
 end
